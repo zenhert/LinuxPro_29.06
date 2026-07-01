@@ -11,8 +11,8 @@
 - VMWare ESXI
 - Хостовая ОС: [Ubuntu 22.04.5 LTS]
 - Текущая версия ядра:
-  zenhert@lp:~$ uname -r
-    5.15.0-185-generic
+  [zenhert@lp:~$ uname -r
+    5.15.0-185-generic]
 
 ---
 
