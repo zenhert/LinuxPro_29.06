@@ -23,13 +23,9 @@ https://kernel.ubuntu.com/mainline/v7.1.2/amd64/
 ```
 zenhert@lp:~$ mkdir distr && cd distr
 zenhert@lp:~/distr$
-
 zenhert@lp:~/distr$ wget https://kernel.ubuntu.com/mainline/v7.1.2/amd64/linux-headers-7.1.2-070102-generic_7.1.2-070102.202606271039_amd64.deb
-
 zenhert@lp:~/distr$ wget https://kernel.ubuntu.com/mainline/v7.1.2/amd64/linux-headers-7.1.2-070102_7.1.2-070102.202606271039_all.deb
-
 zenhert@lp:~/distr$ wget https://kernel.ubuntu.com/mainline/v7.1.2/amd64/linux-image-unsigned-7.1.2-070102-generic_7.1.2-070102.202606271039_amd64.deb
-
 zenhert@lp:~/distr$ wget https://kernel.ubuntu.com/mainline/v7.1.2/amd64/linux-modules-7.1.2-070102-generic_7.1.2-070102.202606271039_amd64.deb
 ```
 
