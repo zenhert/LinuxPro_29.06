@@ -196,8 +196,10 @@ Filesystem UUID: 6bbec936-67c5-4b69-83e2-be9eadf9a357
 ```
 
 Монтирование разделов по каталогам:
+```
 zenhert@linpro:~$ sudo mkdir -p /raid/part{1,2,3,4,5}
 zenhert@linpro:~$ sudo -i
 root@linpro:~# for i in $(seq 1 5); do mount /dev/md0p$i /raid/part$i; done
+```
 
 Таблица GPT создана, разделы смонтированы.
