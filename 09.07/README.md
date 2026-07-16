@@ -28,12 +28,17 @@
 ### 1. Добавление и подготовка дисков
 Проверка наличия дисков и их размера:
 ```
-zenhert@linpro:~$ sudo lshw -short | grep disk
-/0/3/0.0.0    /dev/sda    disk       429GB Virtual disk
-/0/3/0.1.0    /dev/sdb    disk       107GB Virtual disk
-/0/3/0.2.0    /dev/sdc    disk       10GB Virtual disk
-/0/3/0.3.0    /dev/sdd    disk       10GB Virtual disk
-/0/3/0.4.0    /dev/sde    disk       10GB Virtual disk
-/0/3/0.5.0    /dev/sdf    disk       10GB Virtual disk
-/0/2/0.0.0    /dev/cdrom  disk       VMware SATA CD00
+root@linpro:~# lsblk
+NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda      8:0    0  400G  0 disk
+sdb      8:16   0  100G  0 disk
+├─sdb1   8:17   0    1G  0 part /boot/efi
+└─sdb2   8:18   0 98.9G  0 part /
+sdc      8:32   0   10G  0 disk
+sdd      8:48   0   10G  0 disk
+sde      8:64   0   10G  0 disk
+sdf      8:80   0   10G  0 disk
+sr0     11:0    1 1024M  0 rom
 ```
+Диски sdc,sdd будут использоваться для базовых вещей и снапшотов.
+На дисках sde,sdf будет создан lvm mirror
