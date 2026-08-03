@@ -53,7 +53,6 @@ root@linpro:~# lvcreate -n lv_zen -l +100%FREE /dev/vg_zen -y
 
 Создание файловой системы и монтирование:
 ```
-
 root@linpro:~# mkfs.ext4 /dev/vg_zen/lv_zen
 mke2fs 1.47.0 (5-Feb-2023)
 Creating filesystem with 2620416 4k blocks and 655360 inodes
@@ -113,21 +112,28 @@ sr0              11:0    1 1024M  0 rom
 
 Необходимо изменить размер тома и вернуть на него рут:
 
-
+Создание физического тома LVM:
+```
 root@linpro:~# pvcreate /dev/sdb2
 WARNING: ext4 signature detected on /dev/sdb2 at offset 1080. Wipe it? [y/n]: y
   Wiping ext4 signature on /dev/sdb2.
   Physical volume "/dev/sdb2" successfully created.
+```
 
+Создание группы томов на физическом:
+```
 root@linpro:~# vgcreate vg_root /dev/sdb2
   Volume group "vg_root" successfully created
+```
 
-
-
+Создание логического тома размером 8G:
+```
 root@linpro:~# lvcreate -n vg_root/lv_root -L 8G /dev/vg_root
   Logical volume "lv_root" created.
+```
 
-
+Проверка нового тома:
+```
 root@linpro:~# lsblk
 NAME                MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
 sda                   8:0    0  400G  0 disk
@@ -142,27 +148,28 @@ sde                   8:64   0   10G  0 disk
 sdf                   8:80   0   10G  0 disk
 sr0                  11:0    1 1024M  0 rom
 root@linpro:~#
+```
 
-
+Создание файловой системы и монтирование:
+```
 root@linpro:~# mkfs.ext4 /dev/vg_root/lv_root
 mke2fs 1.47.0 (5-Feb-2023)
 Creating filesystem with 2097152 4k blocks and 524288 inodes
 Filesystem UUID: e393ea2c-9b40-41a1-af70-a9da90dcc28e
 Superblock backups stored on blocks:
         32768, 98304, 163840, 229376, 294912, 819200, 884736, 1605632
-
-
-
-
+```
+```
 root@linpro:~# rsync -avxHAX --progress / /mnt/
 sent 7,175,365,319 bytes  received 1,601,533 bytes  103,265,710.10 bytes/sec
 total size is 7,171,856,940  speedup is 1.00
+```
 
-
-
+Конфигурирование grub:
+```
 root@linpro:~# for i in /proc/ /sys/ /dev/ /run/ /boot/; do mount --bind $i /mnt/$i; done
-
-
+```
+```
 root@linpro:~# chroot /mnt/
 root@linpro:/# grub-mkconfig -o /boot/grub/grub.cfg
 Sourcing file `/etc/default/grub'
@@ -174,12 +181,16 @@ Systems on them will not be added to the GRUB boot configuration.
 Check GRUB_DISABLE_OS_PROBER documentation entry.
 Adding boot menu entry for UEFI Firmware Settings ...
 done
+```
 
+Выход из chroot и перезагрузка:
+```
 root@linpro:~# exit
 root@linpro:~# reboot
+```
 
-
-
+Проверка успешного переноса /:
+```
 zenhert@linpro:~$ lsblk
 NAME                MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
 sda                   8:0    0  400G  0 disk
@@ -194,4 +205,5 @@ sde                   8:64   0   10G  0 disk
 sdf                   8:80   0   10G  0 disk
 sr0                  11:0    1 1024M  0 rom
 zenhert@linpro:~$
+```
 
