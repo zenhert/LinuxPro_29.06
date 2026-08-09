@@ -34,7 +34,7 @@ cat << EOF > "$EXPORT_FILE"
 /srv/share ${CLIENT_IP}(rw,sync,root_squash,no_subtree_check)
 EOF
 
-echo "Примерка экспорта..."
+echo "Проверка экспорта..."
 exportfs -r
 
 echo "Проверка экспорта..."
