@@ -7,7 +7,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 exec > >(tee -a /root/nfsc_setup.log) 2>&1
-echo "=== $(date) Старт настройки NFS клиента ==="
+echo "=== $(date) Старт настройки NFS-клиента ==="
 
 SERVER_IP="10.101.2.20"
 MOUNT_POINT="/mnt"
