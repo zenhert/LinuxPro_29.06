@@ -1,0 +1,97 @@
+=== Sun Aug  9 07:12:15 PM UTC 2026 Старт настройки NFS-клиента ===
+Установка пакета nfs-common...
+
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+Hit:1 http://ru.archive.ubuntu.com/ubuntu noble InRelease
+Hit:2 http://ru.archive.ubuntu.com/ubuntu noble-updates InRelease
+Hit:3 http://ru.archive.ubuntu.com/ubuntu noble-backports InRelease
+Hit:4 http://security.ubuntu.com/ubuntu noble-security InRelease
+Reading package lists...
+Building dependency tree...
+Reading state information...
+109 packages can be upgraded. Run 'apt list --upgradable' to see them.
+
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+Reading package lists...
+Building dependency tree...
+Reading state information...
+The following additional packages will be installed:
+  keyutils libnfsidmap1 rpcbind
+Suggested packages:
+  watchdog
+The following NEW packages will be installed:
+  keyutils libnfsidmap1 nfs-common rpcbind
+0 upgraded, 4 newly installed, 0 to remove and 109 not upgraded.
+Need to get 400 kB of archives.
+After this operation, 1,416 kB of additional disk space will be used.
+Get:1 http://ru.archive.ubuntu.com/ubuntu noble-updates/main amd64 libnfsidmap1 amd64 1:2.6.4-3ubuntu5.1 [48.3 kB]
+Get:2 http://ru.archive.ubuntu.com/ubuntu noble/main amd64 rpcbind amd64 1.2.6-7ubuntu2 [46.5 kB]
+Get:3 http://ru.archive.ubuntu.com/ubuntu noble/main amd64 keyutils amd64 1.6.3-3build1 [56.8 kB]
+Get:4 http://ru.archive.ubuntu.com/ubuntu noble-updates/main amd64 nfs-common amd64 1:2.6.4-3ubuntu5.1 [248 kB]
+Fetched 400 kB in 0s (8,919 kB/s)
+Selecting previously unselected package libnfsidmap1:amd64.
+(Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 85400 files and directories currently installed.)
+Preparing to unpack .../libnfsidmap1_1%3a2.6.4-3ubuntu5.1_amd64.deb ...
+Unpacking libnfsidmap1:amd64 (1:2.6.4-3ubuntu5.1) ...
+Selecting previously unselected package rpcbind.
+Preparing to unpack .../rpcbind_1.2.6-7ubuntu2_amd64.deb ...
+Unpacking rpcbind (1.2.6-7ubuntu2) ...
+Selecting previously unselected package keyutils.
+Preparing to unpack .../keyutils_1.6.3-3build1_amd64.deb ...
+Unpacking keyutils (1.6.3-3build1) ...
+Selecting previously unselected package nfs-common.
+Preparing to unpack .../nfs-common_1%3a2.6.4-3ubuntu5.1_amd64.deb ...
+Unpacking nfs-common (1:2.6.4-3ubuntu5.1) ...
+Setting up libnfsidmap1:amd64 (1:2.6.4-3ubuntu5.1) ...
+Setting up rpcbind (1.2.6-7ubuntu2) ...
+Created symlink /etc/systemd/system/multi-user.target.wants/rpcbind.service → /usr/lib/systemd/system/rpcbind.service.
+Created symlink /etc/systemd/system/sockets.target.wants/rpcbind.socket → /usr/lib/systemd/system/rpcbind.socket.
+Setting up keyutils (1.6.3-3build1) ...
+Setting up nfs-common (1:2.6.4-3ubuntu5.1) ...
+
+Creating config file /etc/idmapd.conf with new version
+
+Creating config file /etc/nfs.conf with new version
+info: Selecting UID from range 100 to 999 ...
+
+info: Adding system user `statd' (UID 111) ...
+info: Adding new user `statd' (UID 111) with group `nogroup' ...
+info: Not creating home directory `/var/lib/nfs'.
+Created symlink /etc/systemd/system/multi-user.target.wants/nfs-client.target → /usr/lib/systemd/system/nfs-client.target.
+Created symlink /etc/systemd/system/remote-fs.target.wants/nfs-client.target → /usr/lib/systemd/system/nfs-client.target.
+auth-rpcgss-module.service is a disabled or a static unit, not starting it.
+nfs-idmapd.service is a disabled or a static unit, not starting it.
+nfs-utils.service is a disabled or a static unit, not starting it.
+proc-fs-nfsd.mount is a disabled or a static unit, not starting it.
+rpc-gssd.service is a disabled or a static unit, not starting it.
+rpc-statd-notify.service is a disabled or a static unit, not starting it.
+rpc-statd.service is a disabled or a static unit, not starting it.
+rpc-svcgssd.service is a disabled or a static unit, not starting it.
+Processing triggers for man-db (2.12.0-4build2) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.8) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+Создание точки монтирования /mnt...
+Добавление записи в /etc/fstab...
+Принудительный systemd daemon-reload и перезапуск remote-fs.target...
+Текущее монтирование:
+systemd-1 on /mnt type autofs (rw,relatime,fd=74,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=23818)
+Попытка активировать монтирование (обращение к /mnt):
+total 12
+drwxr-xr-x  3 nobody nogroup 4096 Aug  9 19:10 .
+drwxr-xr-x 23 root   root    4096 Aug  9 18:49 ..
+drwxrwxrwx  2 nobody nogroup 4096 Aug  9 19:10 upload
+Проверка состояния монтирования после обращения:
+systemd-1 on /mnt type autofs (rw,relatime,fd=74,pgrp=1,timeout=0,minproto=5,maxproto=5,direct,pipe_ino=23818)
+10.101.2.20:/srv/share/ on /mnt type nfs (rw,relatime,vers=3,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,mountaddr=10.101.2.20,mountvers=3,mountport=33553,mountproto=udp,local_lock=none,addr=10.101.2.20)
+=== Sun Aug  9 07:12:25 PM UTC 2026 Настройка клиента завершена ===
