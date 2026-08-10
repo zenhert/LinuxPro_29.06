@@ -19,7 +19,7 @@
 ## Ход работы
 
 ### 1. Написать service, который будет раз в 30 секунд мониторить лог на предмет наличия ключевого слова
-Создание конфигцрационного файла для переменных:
+Создание конфигурационного файла для переменных:
 ```
 root@linpro:~# cat > /etc/default/watchlog << EOF
 # Configuration file for my watchlog service
@@ -76,7 +76,7 @@ EOF
 ```
 PS: `\$WORD` и `\$LOG` экранированы `(\$)` чтобы `systemd` не интерпретировал их как переменные окружения при запуске.
 
-Создание юнита таймера:
+Создание unit-таймера:
 ```
 root@linpro:~# cat > /etc/systemd/system/watchlog.timer << EOF
 [Unit]
@@ -97,7 +97,7 @@ root@linpro:~# systemctl start watchlog.service
 root@linpro:~# systemctl start watchlog.timer
 ```
 
-Если все хорошо, то через минут при просмотре логов будет видно следующее:
+Если все хорошо, то через минуту при просмотре логов будет видно следующее:
 ```
 root@linpro:~# tail -n 20 /var/log/syslog | grep "I found word"
 2026-08-10T14:15:35.550403+00:00 linpro root: Mon Aug 10 14:15:35 UTC 2026: I found word, Master!
