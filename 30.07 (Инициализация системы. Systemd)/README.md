@@ -113,28 +113,164 @@ root@linpro:~# apt install -y spawn-fcgi php php-cgi php-cli apache2 libapache2-
 Создание конфигурационного файла для `spawn-fcgi`:
 ```
 root@linpro:~# mkdir -p /etc/spawn-fcgi
-cat > /etc/spawn-fcgi/fcgi.conf << EOF
-# You must set some working options before the "spawn-fcgi" service will work.
-# If SOCKET points to a file, then this file is cleaned up by the init script.
-#
-# See spawn-fcgi(1) for all possible options.
-#
-# Example :
-SOCKET=/var/run/php-fcgi.sock
-OPTIONS="-u www-data -g www-data -s \$SOCKET -S -M 0600 -C 32 -F 1 -- /usr/bin/php-cgi"
+root@linpro:~# cat > /etc/spawn-fcgi/fcgi.conf << EOF
+SOCKET=/run/php-fcgi.sock
+OPTIONS="-u www-data -g www-data -s $SOCKET -C 32 -F 1 -- /usr/bin/php-cgi"
 EOF
 ```
-PS: `\$SOCKET` здесь тоже экранирован `(\$)`, чтобы sysmted подставил значение переменной из самого файла.
+Первая попытка запуска через unit-файл с использованием `EnvironmentFile` не увенчалась успехом — переменная `$SOCKET` не подставлялась, из-за чего сокет не создавался. После серии диагностических шагов (ручной запуск `spawn-fcgi`, анализ `journalctl`, замена `KillMode`, удаление лишних опций) проблема была решена отказом от `EnvironmentFile` и явным указанием параметров в `ExecStart`.
 
-Создание 
+Итоговый unit-файл `/etc/systemd/system/spawn-fcgi.service`:
+```
+root@linpro:~# cat > /etc/systemd/system/spawn-fcgi.service << 'EOF'
+[Unit]
+Description=Spawn-fcgi startup service by Zenhert
+After=network.target
 
+[Service]
+Type=simple
+ExecStart=/usr/bin/spawn-fcgi -n -u www-data -g www-data -s /run/php-fcgi.sock -C 32 -F 1 -- /usr/bin/php-cgi
+ExecStopPost=/bin/rm -f /run/php-fcgi.sock
+KillMode=process
 
+[Install]
+WantedBy=multi-user.target
+EOF
+```
 
+Применение и запуск сервиса:
+```
+root@linpro:~# systemctl daemon-reload
+root@linpro:~# systemctl start spawn-fcgi
+```
 
+Финальная проверка:
+```
+root@linpro:~# ls -la /run/php-fcgi.sock
+srw-r----- 1 www-data www-data 0 Aug 10 14:51 /run/php-fcgi.sock
+root@linpro:~# systemctl status spawn-fcgi
+● spawn-fcgi.service - Spawn-fcgi startup service by Zenhert
+Loaded: loaded (/etc/systemd/system/spawn-fcgi.service; disabled; preset: enabled)
+Active: active (running) since Mon 2026-08-10 14:51:48 UTC; 10s ago
+Main PID: 70775 (php-cgi)
+Tasks: 33 (limit: 19062)
+Memory: 14.5M (peak: 15.8M)
+CPU: 28ms
+CGroup: /system.slice/spawn-fcgi.service
+├─70775 /usr/bin/php-cgi
+├─70776 /usr/bin/php-cgi
+├─70777 /usr/bin/php-cgi
+...
+└─70807 /usr/bin/php-cgi
 
+Aug 10 14:51:48 linpro systemd[1]: Started spawn-fcgi.service - Spawn-fcgi startup service by Zenhert.
+```
 
+По итогу сокет создан, сервис активен, дочерние процессы `php-cgi` запущены.
 
+### 3. Доработать unit-файл Nginx для запуска нескольких инстансов сервера с разными конфигурационными файлами одновременно
+Установка nginx:
+```
+root@linpro:~# apt install -y nginx
+```
 
+Остановка и отключение стандартного сервиса, чтобы не было конфликтов:
+```
+root@linpro:~# systemctl stop nginx.service
+root@linpro:~# systemctl disable nginx.service
+```
 
+Создание шаблонного unit-файла `nginx@.service`:
+```
+cat > /etc/systemd/system/nginx@.service << 'EOF'
+[Unit]
+Description=A high performance web server and a reverse proxy server
+Documentation=man:nginx(8)
+After=network.target nss-lookup.target
 
+[Service]
+Type=forking
+PIDFile=/run/nginx-%I.pid
+ExecStartPre=/usr/sbin/nginx -t -c /etc/nginx/nginx-%I.conf -q -g 'daemon on; master_process on;'
+ExecStart=/usr/sbin/nginx -c /etc/nginx/nginx-%I.conf -g 'daemon on; master_process on;'
+ExecReload=/usr/sbin/nginx -c /etc/nginx/nginx-%I.conf -g 'daemon on; master_process on;' -s reload
+ExecStop=-/sbin/start-stop-daemon --quiet --stop --retry QUIT/5 --pidfile /run/nginx-%I.pid
+TimeoutStopSec=5
+KillMode=mixed
 
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+Создание конфигурационных файлов для двух инстансов:
+```
+root@linpro:~# cat > /etc/nginx/nginx-first.conf << 'EOF'
+pid /run/nginx-first.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    server {
+        listen 9001;
+        root /usr/share/nginx/html;
+        index index.html;
+    }
+}
+EOF
+```
+```
+root@linpro:~# cat > /etc/nginx/nginx-second.conf << 'EOF'
+pid /run/nginx-second.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    server {
+        listen 9002;
+        root /usr/share/nginx/html;
+        index index.html;
+    }
+}
+EOF
+```
+Первый инстанс слушает 9001 порт, второй - 9002.
+
+Проверка и запуск инстансов:
+```
+root@linpro:~# systemctl start nginx@first
+root@linpro:~# systemctl start nginx@second
+```
+```
+root@linpro:~# systemctl status nginx@first nginx@second
+● nginx@first.service - A high performance web server and a 
+     Active: active (running) since Mon 2026-08-10 15:06:23 UTC;
+● nginx@second.service - A high performance web server and a 
+     Active: active (running) since Mon 2026-08-10 15:06:23 UTC;
+```
+```
+root@linpro:~# ss -tnlp | grep nginx
+LISTEN 0      511          0.0.0.0:9002      0.0.0.0:*    users:(("nginx",pid=76604,fd=5),("nginx",pid=76603,fd=5))                                                           LISTEN 0      511          0.0.0.0:9001      0.0.0.0:*    users:(("nginx",pid=76597,fd=5),("nginx",pid=76596,fd=5)) 
+```
+```
+root@linpro:~# curl http://localhost:9001
+root@linpro:~# curl http://localhost:9002
+```
+Оба курла вернули стандартную страницу nginx, а значит все работает:
+![alt text](image-1.png)
