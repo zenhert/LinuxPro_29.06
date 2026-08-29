@@ -392,3 +392,5 @@ drw-rwx---.  2 root named unconfined_u:object_r:named_zone_t:s0   88 Aug 29 17:5
 -rw-rw----.  1 root named system_u:object_r:named_zone_t:s0      609 Aug 29 17:36 named.dns.lab.view1
 -rw-rw----.  1 root named system_u:object_r:named_zone_t:s0      657 Aug 29 17:36 named.newdns.lab
 ```
+
+Также, попробовал приложить Vagrantfile для проверки.
