@@ -67,6 +67,28 @@ zenhert@linpro:~$ newgrp docker
 ```
 
 ### 2. Создание кастомного образа nginx на базе Alpine
+Создание кастомной страницы `index.html`:
+```
+zenhert@linpro:~$ mkdir ~/docker-nginx-custom
+zenhert@linpro:~$ cd ~/docker-nginx-custom
+zenhert@linpro:~/docker-nginx-custom$ echo "<html><body><h1>Hello from custom nginx on Alpine</h1></body></html>" > index.html
+```
+
+Создание `Dockerfile`:
+```
+zenhert@linpro:~/docker-nginx-custom$ nano Dockerfile
+zenhert@linpro:~/docker-nginx-custom$ cat Dockerfile
+FROM nginx:alpine
+COPY index.html /usr/share/nginx/html/index.html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+
+
+
+
+
 
 
 
