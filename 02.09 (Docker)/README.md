@@ -21,6 +21,7 @@
 ---
 
 ## Ход работы
+Ссылка на репозиторий с образом: https://hub.docker.com/r/zenhert/nginx-custom
 
 ### 1. Установка Docker и Docker Compose
 Добавление официального GPG-ключа Docker:
@@ -110,7 +111,36 @@ zenhert@linpro:~/docker-nginx-custom$ curl http://localhost:8080
 Контейнер (container) — это запущенный экземпляр образа. Он имеет собственный слой для записи, процессы, сеть и состояние. При остановке контейнер можно удалить, а образ останется.
 
 ### 4. Можно ли в контейнере собрать ядро?
-Технически возможно, но для этого нужен котнейнер с установленными инструкментами сборки (`gcc`, `make`, заголовки ядра) и доступом к исходникам. Также следует учесть:
-  - Контейнер разделяет ядро хостовой системы, поэтому собранное ядро будет работаьь только на хосте или виртуальной машине, а не внутри контейнера;
+Технически возможно, но для этого нужен контейнер с установленными инструментами сборки (`gcc`, `make`, заголовки ядра) и доступом к исходникам. Также следует учесть:
+  - Контейнер разделяет ядро хостовой системы, поэтому собранное ядро будет работать только на хосте или виртуальной машине, а не внутри контейнера;
   - Обычно сборка ядра в контейнере используется для воспроизводимых сборок или CI/CD.
-  
+
+### 5. Пуш образа в Docker Hub
+Для того чтобы образ был доступен другим, необходимо пересобрать его с тэгом, содержащим логин Docker Hub, и запушить в реестр:
+```
+zenhert@linpro:~/docker-nginx-custom$ docker build -t zenhert/nginx-custom:1.0 .
+[+] Building 14.9s (7/7) FINISHED
+ => => naming to docker.io/zenhert/nginx-custom:1.0
+ => => unpacking to docker.io/zenhert/nginx-custom:1.0
+```
+
+Авторизация в Docker Hub и пуш образа:
+```
+zenhert@linpro:~/docker-nginx-custom$ docker login -u zenhert
+Login Succeeded
+zenhert@linpro:~/docker-nginx-custom$ docker push zenhert/nginx-custom:1.0
+The push refers to repository [docker.io/zenhert/nginx-custom]
+a905c1b29240: Pushed
+44136fa355b3: Pushed
+850bf2dcecff: Pushed
+55afa1ecc21d: Pushed
+af7dd138f459: Pushed
+58c524ea09ce: Pushed
+bc98d7675616: Pushed
+51900e10fb9c: Pushed
+8f924cf5086c: Pushed
+6636b9fc203c: Pushed
+315bdb50ac9c: Pushed
+1.0: digest: sha256:029138852166e8e7041c075465dd0881c8c7423258dc013eefc668ccdb93441f size: 856
+```
+Образ запушен успешно.
