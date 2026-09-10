@@ -84,13 +84,33 @@ EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
+Сборка образа и проверка:
+```
+zenhert@linpro:~/docker-nginx-custom$ docker build -t nginx-custom:1.0 .
+[+] Building 14.9s (7/7) FINISHED  
+ => => naming to docker.io/library/nginx-custom:1.0
+ => => unpacking to docker.io/library/nginx-custom:1.0
 
+zenhert@linpro:~/docker-nginx-custom$ docker images
+IMAGE              ID             DISK USAGE   CONTENT SIZE   EXTRA
+nginx-custom:1.0   1508505bd74a        102MB         28.8MB
+```
 
+Запуск контейнера и проверка страницы:
+```
+zenhert@linpro:~/docker-nginx-custom$ docker run -d -p 8080:80 --name my-nginx nginx-custom:1.0
+bf6c3b85a1f10269391630eac726cad882f78e60072995bfb4edcd4a824d73f5
+zenhert@linpro:~/docker-nginx-custom$ curl http://localhost:8080
+<html><body><h1>Hello from custom nginx on Alpine</h1></body></html>
+```
 
+### 3. Определить разницу между контейнером и образом
+Образ (image) — это неизменяемый шаблон, содержащий файловую систему и инструкции для запуска приложения. Это как класс в программировании.
 
+Контейнер (container) — это запущенный экземпляр образа. Он имеет собственный слой для записи, процессы, сеть и состояние. При остановке контейнер можно удалить, а образ останется.
 
-
-
-
-
-
+### 4. Можно ли в контейнере собрать ядро?
+Технически возможно, но для этого нужен котнейнер с установленными инструкментами сборки (`gcc`, `make`, заголовки ядра) и доступом к исходникам. Также следует учесть:
+  - Контейнер разделяет ядро хостовой системы, поэтому собранное ядро будет работаьь только на хосте или виртуальной машине, а не внутри контейнера;
+  - Обычно сборка ядра в контейнере используется для воспроизводимых сборок или CI/CD.
+  
