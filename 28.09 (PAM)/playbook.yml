@@ -1,0 +1,55 @@
+- name: Configure PAM restrictions (weekend login for admins only)
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Create users
+      ansible.builtin.user:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - zenadm
+        - zen
+
+    - name: Set password for
+      ansible.builtin.shell: "echo '{{ item }}:Pa$$w0rd' | chpasswd"
+      loop:
+        - zenadm
+        - zen
+      changed_when: true
+
+    - name: Create admin group
+      ansible.builtin.group:
+        name: admin
+        state: present
+
+    - name: Add users to admin group
+      ansible.builtin.user:
+        name: "{{ item }}"
+        groups: admin
+        append: true
+      loop:
+        - zenadm
+        - root
+        - vagrant
+
+    - name: Copy login.sh script
+      ansible.builtin.copy:
+        src: files/login.sh
+        dest: /usr/local/bin/login.sh
+        mode: '0755'
+        owner: root
+        group: root
+
+    - name: Insert pam_exec rule into sshd PAM config
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/sshd
+        insertafter: '^@include common-auth'
+        line: 'auth required pam_exec.so debug /usr/local/bin/login.sh'
+        state: present
+
+    - name: Ensure pam_exec rule is not duplicated
+      ansible.builtin.replace:
+        path: /etc/pam.d/sshd
+        regexp: '(auth required pam_exec\.so debug /usr/local/bin/login\.sh\n){2,}'
+        replace: 'auth required pam_exec.so debug /usr/local/bin/login.sh\n'
