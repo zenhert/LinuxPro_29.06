@@ -48,7 +48,7 @@ zenhert@linpro:~$ cd ~/rsyslog-homework/
 zenhert@linpro:~/rsyslog-homework$ nano Vagrantfile
 zenhert@linpro:~/rsyslog-homework$ cat Vagrantfile
 Vagrant.configure("2") do |config|
-  config.vm.box = "generic/ubuntu2204"
+  config.vm.box = "ubuntu2404"
 
   config.vm.define "web" do |web|
     web.vm.hostname = "web"
@@ -142,20 +142,30 @@ zenhert@linpro:~/rsyslog-homework/ansible$ cat playbook.yml
         name:
           - nginx
           - auditd
+          - audispd-plugins
         state: present
         update_cache: true
+
+    - name: Show current nginx log settings (для отладки)
+      ansible.builtin.command: grep -E "access_log|error_log" /etc/nginx/nginx.conf
+      register: nginx_logs
+      changed_when: false
+
+    - name: Print current nginx log settings
+      ansible.builtin.debug:
+        var: nginx_logs.stdout_lines
 
     - name: Configure nginx access_log to remote syslog
       ansible.builtin.replace:
         path: /etc/nginx/nginx.conf
-        regexp: '^\s*access_log /var/log/nginx/access\.log;'
+        regexp: '^\s*access_log\s+/var/log/nginx/access\.log.*;'
         replace: "\taccess_log syslog:server=192.168.59.11:514,tag=nginx_access;"
       notify: restart nginx
 
     - name: Configure nginx error_log (remote all + local crit)
       ansible.builtin.replace:
         path: /etc/nginx/nginx.conf
-        regexp: '^\s*error_log /var/log/nginx/error\.log;'
+        regexp: '^\s*error_log\s+/var/log/nginx/error\.log.*;'
         replace: "\terror_log syslog:server=192.168.59.11:514,tag=nginx_error info;\n\terror_log /var/log/nginx/error.log crit;"
       notify: restart nginx
 
@@ -165,21 +175,6 @@ zenhert@linpro:~/rsyslog-homework/ansible$ cat playbook.yml
         groups: adm
         append: true
 
-    - name: Make auditd write logs readable by adm group
-      ansible.builtin.lineinfile:
-        path: /etc/audit/auditd.conf
-        regexp: '^log_group ='
-        line: 'log_group = adm'
-      notify: restart auditd
-
-    - name: Ensure /var/log/audit directory mode allows adm read
-      ansible.builtin.file:
-        path: /var/log/audit
-        state: directory
-        mode: '0750'
-        owner: root
-        group: adm
-
     - name: Deploy audit rule for nginx configs
       ansible.builtin.copy:
         src: files/nginx.rules
@@ -187,7 +182,7 @@ zenhert@linpro:~/rsyslog-homework/ansible$ cat playbook.yml
         mode: '0640'
         owner: root
         group: root
-      notify: reload audit rules
+      notify: load audit rules
 
     - name: Deploy rsyslog client config
       ansible.builtin.template:
@@ -207,12 +202,7 @@ zenhert@linpro:~/rsyslog-homework/ansible$ cat playbook.yml
         name: rsyslog
         state: restarted
 
-    - name: restart auditd
-      ansible.builtin.service:
-        name: auditd
-        state: restarted
-
-    - name: reload audit rules
+    - name: load audit rules
       ansible.builtin.command: augenrules --load
       changed_when: true
 ```
@@ -234,25 +224,25 @@ template(name="RemoteLogs" type="string"
 
 # nginx access logs
 if $programname == "nginx_access" then {
-    action(type="omfile" dynaFile="RemoteLogs")
+    action(type="omfile" dynaFile="RemoteLogs" createDirs="on")
     stop
 }
 
 # nginx error logs
 if $programname == "nginx_error" then {
-    action(type="omfile" dynaFile="RemoteLogs")
+    action(type="omfile" dynaFile="RemoteLogs" createDirs="on")
     stop
 }
 
 # audit logs (facility local6)
 if $syslogfacility-text == "local6" then {
-    action(type="omfile" file="/var/log/rsyslog/%HOSTNAME%/audit.log")
+    action(type="omfile" file="/var/log/rsyslog/%HOSTNAME%/audit.log" createDirs="on")
     stop
 }
 
 # Critical system logs from remote hosts
 if $fromhost-ip != "127.0.0.1" and $syslogseverity <= 2 then {
-    action(type="omfile" file="/var/log/rsyslog/%HOSTNAME%/syslog.log")
+    action(type="omfile" file="/var/log/rsyslog/%HOSTNAME%/syslog.log" createDirs="on")
     stop
 }
 ```
@@ -271,7 +261,7 @@ input(type="imfile"
       Facility="local6"
       Severity="info"
       PersistStateInterval="1"
-      startmsg.regex="^type=")
+      readMode="2")
 
 # Forward audit logs to remote server
 local6.* @@192.168.59.11:514
@@ -286,7 +276,6 @@ zenhert@linpro:~/rsyslog-homework/ansible/templates$ cd ../files/
 zenhert@linpro:~/rsyslog-homework/ansible/files$ nano nginx.rules
 zenhert@linpro:~/rsyslog-homework/ansible/files$ cat nginx.rules
 -w /etc/nginx/ -p wa -k nginx_config
-zenhert@linpro:~/rsyslog-homework/ansibl
 ```
 
 ### 2. Запуск стенда и проверка
@@ -303,25 +292,60 @@ web                       running (virtualbox)
 log                       running (virtualbox)
 ```
 
-Проверка на `web`:
+Проверка на `web`(запущен ли nginx, валиден ли конфиг, текущие настройки логирования, проверка rsyslog):
 ```
 zenhert@linpro:~/rsyslog-homework$ vagrant ssh web
-Last login: Thu Oct  8 08:59:05 2026 from 10.0.2.2
+Last login: Mon Oct 12 13:02:41 2026 from 10.0.2.2
 vagrant@web:~$ sudo -i
 root@web:~# nginx -t
 nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
 nginx: configuration file /etc/nginx/nginx.conf test is successful
-root@web:~# systemctl status nginx
+root@web:~# systemctl status nginx --no-pager
 ● nginx.service - A high performance web server and a reverse proxy server
-     Loaded: loaded (/lib/systemd/system/nginx.service; enabled; vendor preset: enabled)
-     Active: active (running) since Thu 2026-10-08 08:19:39 UTC; 5h 29min ago
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-10-12 13:03:49 UTC; 4min 47s ago
+root@web:~# grep -E "access_log|error_log" /etc/nginx/nginx.conf
+        error_log syslog:server=192.168.59.11:514,tag=nginx_error info;
+        error_log /var/log/nginx/error.log crit;
+        access_log syslog:server=192.168.59.11:514,tag=nginx_access;
+root@web:~# systemctl status rsyslog --no-pager
+● rsyslog.service - System Logging Service
+     Loaded: loaded (/usr/lib/systemd/system/rsyslog.service; enabled; preset: enabled)
+     Active: active (running) since Mon 2026-10-12 13:03:47 UTC; 9min ago
 ```
-Конфиг валиден, `nginx` запущен.
 
-Генерация тестовых запросов и ошибок, проверка `audit` и логов:
+Генерация событий на `web`(генерация запросов, ошибка 403, изменение конфига, проверка аудита):
+```
+root@web:~# for i in {1..5}; do curl -s http://localhost/ > /dev/null; done
+root@web:~# mv /var/www/html/index.nginx-debian.html /tmp/
+root@web:~# curl -s -o /dev/null -w "HTTP код: %{http_code}\n" http://localhost/
+HTTP код: 403
+root@web:~# mv /tmp/index.nginx-debian.html /var/www/html/
+root@web:~# echo "# audit test $(date)" >> /etc/nginx/nginx.conf
+root@web:~# ausearch -k nginx_config --start recent | tail -10
+type=PATH msg=audit(1791811523.467:344): item=0 name="/etc/nginx/" inode=525841 dev=fc:00 mode=040755 ouid=0 ogid=0 rdev=00:00 nametype=PARENT cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=CWD msg=audit(1791811523.467:344): cwd="/root"
+type=SYSCALL msg=audit(1791811523.467:344): arch=c000003e syscall=257 success=yes exit=3 a0=ffffff9c a1=5a794e0107d0 a2=441 a3=1b6 items=2 ppid=1718 pid=1719 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts1 ses=4 comm="bash" exe="/usr/bin/bash" subj=unconfined key="nginx_config"
+----
+time->Mon Oct 12 13:30:56 2026
+type=PROCTITLE msg=audit(1791811856.720:347): proctitle="-bash"
+type=PATH msg=audit(1791811856.720:347): item=1 name="/etc/nginx/nginx.conf" inode=655378 dev=fc:00 mode=0100644 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=PATH msg=audit(1791811856.720:347): item=0 name="/etc/nginx/" inode=525841 dev=fc:00 mode=040755 ouid=0 ogid=0 rdev=00:00 nametype=PARENT cap_fp=0 cap_fi=0 cap_fe=0 cap_fver=0 cap_frootid=0
+type=CWD msg=audit(1791811856.720:347): cwd="/root"
+type=SYSCALL msg=audit(1791811856.720:347): arch=c000003e syscall=257 success=yes exit=3 a0=ffffff9c a1=5a794e010860 a2=441 a3=1b6 items=2 ppid=1718 pid=1719 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts1 ses=4 comm="bash" exe="/usr/bin/bash" subj=unconfined key="nginx_config"
+```
+
+Проверка на `log`(проверка 514 порта, какие файлы создались, логи nginx, audit-логи, критичные системные логи):
 ```
 
 ```
+
+
+
+
+
+
+
 
 
 
