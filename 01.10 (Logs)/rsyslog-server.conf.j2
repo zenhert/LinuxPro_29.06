@@ -1,0 +1,37 @@
+# Load TCP/UDP input modules
+module(load="imtcp")
+input(type="imtcp" port="514")
+module(load="imudp")
+input(type="imudp" port="514")
+
+# Templates
+template(name="RemoteLogs" type="string"
+         string="/var/log/rsyslog/%HOSTNAME%/%PROGRAMNAME%.log")
+template(name="RemoteAudit" type="string"
+         string="/var/log/rsyslog/%HOSTNAME%/audit.log")
+template(name="RemoteSyslog" type="string"
+         string="/var/log/rsyslog/%HOSTNAME%/syslog.log")
+
+# nginx access logs
+if $programname == "nginx_access" then {
+    action(type="omfile" dynaFile="RemoteLogs" createDirs="on")
+    stop
+}
+
+# nginx error logs
+if $programname == "nginx_error" then {
+    action(type="omfile" dynaFile="RemoteLogs" createDirs="on")
+    stop
+}
+
+# audit logs (facility local6)
+if $syslogfacility-text == "local6" then {
+    action(type="omfile" dynaFile="RemoteAudit" createDirs="on")
+    stop
+}
+
+# Critical system logs from remote hosts
+if $fromhost-ip != "127.0.0.1" and $syslogseverity <= 2 then {
+    action(type="omfile" dynaFile="RemoteSyslog" createDirs="on")
+    stop
+}

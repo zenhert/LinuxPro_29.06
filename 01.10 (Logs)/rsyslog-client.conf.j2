@@ -1,0 +1,17 @@
+# Load imfile to read the audit log
+module(load="imfile")
+
+# Read audit log and tag it
+input(type="imfile"
+      File="/var/log/audit/audit.log"
+      Tag="audit"
+      Facility="local6"
+      Severity="info"
+      PersistStateInterval="1"
+      readMode="2")
+
+# Forward audit logs to remote server
+local6.* @@192.168.59.11:514
+
+# Forward critical system logs to remote server
+*.crit @@192.168.59.11:514

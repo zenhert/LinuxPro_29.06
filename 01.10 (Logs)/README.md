@@ -90,8 +90,8 @@ zenhert@linpro:~/rsyslog-homework/ansible$ cat playbook.yml
   become: true
   tasks:
     - name: Set timezone to UTC
-      community.general.timezone:
-        name: UTC
+      ansible.builtin.command: timedatectl set-timezone UTC
+      changed_when: false
 
     - name: Add cluster hosts to /etc/hosts
       ansible.builtin.lineinfile:
@@ -113,10 +113,12 @@ zenhert@linpro:~/rsyslog-homework/ansible$ cat playbook.yml
   hosts: logservers
   become: true
   tasks:
-    - name: Ensure /var/log/rsyslog exists
+    - name: Ensure /var/log/rsyslog exists with correct ownership
       ansible.builtin.file:
         path: /var/log/rsyslog
         state: directory
+        owner: syslog
+        group: adm
         mode: '0755'
 
     - name: Deploy rsyslog server config
@@ -212,15 +214,20 @@ zenhert@linpro:~/rsyslog-homework/ansible$ cat playbook.yml
 zenhert@linpro:~/rsyslog-homework/ansible$ cd templates/
 zenhert@linpro:~/rsyslog-homework/ansible/templates$ nano rsyslog-server.conf.j2
 zenhert@linpro:~/rsyslog-homework/ansible/templates$ cat rsyslog-server.conf.j2
+
 # Load TCP/UDP input modules
 module(load="imtcp")
 input(type="imtcp" port="514")
 module(load="imudp")
 input(type="imudp" port="514")
 
-# Template for dynamic log paths
+# Templates
 template(name="RemoteLogs" type="string"
          string="/var/log/rsyslog/%HOSTNAME%/%PROGRAMNAME%.log")
+template(name="RemoteAudit" type="string"
+         string="/var/log/rsyslog/%HOSTNAME%/audit.log")
+template(name="RemoteSyslog" type="string"
+         string="/var/log/rsyslog/%HOSTNAME%/syslog.log")
 
 # nginx access logs
 if $programname == "nginx_access" then {
@@ -236,13 +243,13 @@ if $programname == "nginx_error" then {
 
 # audit logs (facility local6)
 if $syslogfacility-text == "local6" then {
-    action(type="omfile" file="/var/log/rsyslog/%HOSTNAME%/audit.log" createDirs="on")
+    action(type="omfile" dynaFile="RemoteAudit" createDirs="on")
     stop
 }
 
 # Critical system logs from remote hosts
 if $fromhost-ip != "127.0.0.1" and $syslogseverity <= 2 then {
-    action(type="omfile" file="/var/log/rsyslog/%HOSTNAME%/syslog.log" createDirs="on")
+    action(type="omfile" dynaFile="RemoteSyslog" createDirs="on")
     stop
 }
 ```
@@ -335,31 +342,39 @@ type=CWD msg=audit(1791811856.720:347): cwd="/root"
 type=SYSCALL msg=audit(1791811856.720:347): arch=c000003e syscall=257 success=yes exit=3 a0=ffffff9c a1=5a794e010860 a2=441 a3=1b6 items=2 ppid=1718 pid=1719 auid=1000 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=pts1 ses=4 comm="bash" exe="/usr/bin/bash" subj=unconfined key="nginx_config"
 ```
 
-Проверка на `log`(проверка 514 порта, какие файлы создались, логи nginx, audit-логи, критичные системные логи):
+
+Проверка на `log`(какие файлы создались, содержимое логов nginx и audit):
+```
+root@log:~# find /var/log/rsyslog/ -type f -exec ls -la {} \;
+-rw-r--r-- 1 syslog syslog 13070 Oct 17 14:50 /var/log/rsyslog/web/audit.log
+-rw-r--r-- 1 syslog syslog 366 Oct 17 14:33 /var/log/rsyslog/web/nginx_error.log
+-rw-r--r-- 1 syslog syslog 369 Oct 17 14:33 /var/log/rsyslog/web/nginx_access.log
 ```
 
+Файл access-логов `nginx`:  
+```
+root@log:~# tail -3 /var/log/rsyslog/web/nginx_access.log
+2026-10-17T14:33:11+00:00 web nginx_access: ::1 - - [17/Oct/2026:14:33:11 +0000] "GET / HTTP/1.1" 200 615 "-" "curl/8.5.0"
+2026-10-17T14:33:17+00:00 web nginx_access: ::1 - - [17/Oct/2026:14:33:17 +0000] "GET / HTTP/1.1" 200 615 "-" "curl/8.5.0"
+2026-10-17T14:33:19+00:00 web nginx_access: ::1 - - [17/Oct/2026:14:33:19 +0000] "GET / HTTP/1.1" 200 615 "-" "curl/8.5.0"
 ```
 
+Файл error-логов (сгенерированная ошибка 403):
+```
+root@log:~# cat /var/log/rsyslog/web/nginx_error.log
+2026-10-17T14:33:21+00:00 web nginx_error: 2026/10/17 14:33:21 [error] 3111#3111: *6 directory index of "/var/www/html/" is forbidden, client: ::1, server: _, request: "GET / HTTP/1.1", host: "localhost"
+```
 
+Файл audit-логов (события изменения):
+```
+root@log:~# grep nginx_config /var/log/rsyslog/web/audit.log | tail -3
+2026-10-17T14:39:48+00:00 web audit type=PATH msg=audit(1792247988.372:8263): item=0 name="/etc/nginx/" inode=525841 ... key="nginx_config"
+2026-10-17T14:39:48+00:00 web audit type=PATH msg=audit(1792247988.372:8263): item=1 name="/etc/nginx/nginx.conf" inode=655378 ... key="nginx_config"
+```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+Локально на `web` остаются только критичные логи и выше:
+```
+root@web:~# ls -la /var/log/nginx/
+-rw-r-----  1 www-data adm       0 Oct 12 13:02 access.log
+-rw-r-----  1 www-data adm       0 Oct 14 00:00 error.log
+```
