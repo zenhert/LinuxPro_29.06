@@ -1,0 +1,4 @@
+backup_disk.vdi
+ansible/keys/
+.vagrant/
+*.retry

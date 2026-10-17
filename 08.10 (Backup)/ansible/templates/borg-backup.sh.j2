@@ -1,0 +1,40 @@
+#!/bin/bash
+set -euo pipefail
+
+REPO="{{ borg_repo }}"
+BACKUP_TARGET="/etc"
+BACKUP_NAME="etc-$(date +%Y-%m-%d_%H:%M:%S)"
+
+export BORG_PASSPHRASE="$(cat /root/.borg-passphrase)"
+export BORG_RSH="ssh -i /root/.ssh/id_borg -o StrictHostKeyChecking=accept-new"
+
+log() { logger -t borg-backup "$*"; }
+
+log "START: creating ${BACKUP_NAME}"
+if borg create --stats --compression lz4 "${REPO}::${BACKUP_NAME}" "${BACKUP_TARGET}" 2>&1 \
+        | logger -t borg-backup; then
+    log "CREATE OK: ${BACKUP_NAME}"
+else
+    log "CREATE FAILED: ${BACKUP_NAME}"
+    exit 1
+fi
+
+log "CHECK: starting repository check"
+if borg check "${REPO}" 2>&1 | logger -t borg-backup; then
+    log "CHECK OK"
+else
+    log "CHECK FAILED"
+fi
+
+log "PRUNE: applying retention policy (daily=90, monthly=12, yearly=1)"
+if borg prune --list \
+        --keep-daily 90 \
+        --keep-monthly 12 \
+        --keep-yearly 1 \
+        "${REPO}" 2>&1 | logger -t borg-backup; then
+    log "PRUNE OK"
+else
+    log "PRUNE FAILED"
+fi
+
+log "DONE"

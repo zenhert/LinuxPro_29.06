@@ -1,0 +1,10 @@
+[Unit]
+Description=Borg Backup of /etc to remote
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/borg-backup.sh
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,206 @@
+---
+# 1. Генерация SSH-ключа на контроллере (хосте)
+# Ключ создаётся один раз и раздаётся обеим машинам.
+- name: Generate borg SSH keypair on controller
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Ensure local keys directory exists
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/keys"
+        state: directory
+        mode: '0700'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Generate ed25519 keypair
+      ansible.builtin.command:
+        cmd: ssh-keygen -t ed25519 -N '' -f {{ playbook_dir }}/keys/id_borg -C borg@client
+        creates: "{{ playbook_dir }}/keys/id_borg"
+      delegate_to: localhost
+      run_once: true
+
+# 2. Общие настройки
+- name: Common configuration
+  hosts: all
+  become: true
+  tasks:
+    - name: Set timezone UTC
+      ansible.builtin.command: timedatectl set-timezone UTC
+      changed_when: false
+
+    - name: Populate /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "192.168.60.10 backup"
+        - "192.168.60.11 client"
+
+    - name: Install borgbackup
+      ansible.builtin.apt:
+        name: borgbackup
+        state: present
+        update_cache: true
+
+# 3. Backup-сервер
+- name: Configure backup server
+  hosts: backup_servers
+  become: true
+  tasks:
+    - name: Create borg user
+      ansible.builtin.user:
+        name: borg
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    - name: Check if /dev/sdb already has a filesystem
+      ansible.builtin.command: blkid /dev/sdb
+      register: sdb_blkid
+      changed_when: false
+      failed_when: false
+
+    - name: Format backup disk as ext4 with label
+      ansible.builtin.command:
+        cmd: mkfs.ext4 -F -L borgbackup /dev/sdb
+      when: sdb_blkid.rc != 0
+
+    - name: Ensure /var/backup mount point exists
+      ansible.builtin.file:
+        path: /var/backup
+        state: directory
+        mode: '0755'
+
+    - name: Add /var/backup to fstab
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        line: "LABEL=borgbackup /var/backup ext4 defaults 0 0"
+        state: present
+
+    - name: Check if /var/backup is mounted
+      ansible.builtin.command: mountpoint -q /var/backup
+      register: mount_check
+      changed_when: false
+      failed_when: false
+
+    - name: Mount /var/backup
+      ansible.builtin.command: mount /var/backup
+      when: mount_check.rc != 0
+
+    - name: Set ownership on /var/backup
+      ansible.builtin.file:
+        path: /var/backup
+        owner: borg
+        group: borg
+        mode: '0700'
+
+    - name: Ensure repository subdirectory exists
+      ansible.builtin.file:
+        path: /var/backup/repo
+        state: directory
+        owner: borg
+        group: borg
+        mode: '0700'
+
+    - name: Ensure /home/borg/.ssh exists
+      ansible.builtin.file:
+        path: /home/borg/.ssh
+        state: directory
+        owner: borg
+        group: borg
+        mode: '0700'
+
+    - name: Install client public key for borg (restricted to /var/backup)
+      ansible.builtin.copy:
+        content: "command=\"borg serve --restrict-to-path /var/backup\",restrict {{ lookup('file', playbook_dir + '/keys/id_borg.pub') }}\n"
+        dest: /home/borg/.ssh/authorized_keys
+        owner: borg
+        group: borg
+        mode: '0600'
+
+# 4. Клиент — инициализация репозитория, скрипт, таймер
+- name: Configure client backups
+  hosts: clients
+  become: true
+  vars:
+    borg_repo: "borg@192.168.60.10:/var/backup/repo/"
+    borg_passphrase: "OtusBackupPassphrase2026!"
+  tasks:
+    - name: Ensure /root/.ssh exists
+      ansible.builtin.file:
+        path: /root/.ssh
+        state: directory
+        mode: '0700'
+
+    - name: Install borg private key on client
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/keys/id_borg"
+        dest: /root/.ssh/id_borg
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Store borg passphrase in root-only file
+      ansible.builtin.copy:
+        content: "{{ borg_passphrase }}\n"
+        dest: /root/.borg-passphrase
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Add backup host to known_hosts
+      ansible.builtin.shell: |
+        ssh-keyscan -H 192.168.60.10 >> /root/.ssh/known_hosts 2>/dev/null
+      changed_when: false
+
+    - name: Check if borg repo already initialized
+      ansible.builtin.command:
+        cmd: borg list {{ borg_repo }}
+      environment:
+        BORG_PASSPHRASE: "{{ borg_passphrase }}"
+        BORG_RSH: "ssh -i /root/.ssh/id_borg -o StrictHostKeyChecking=accept-new"
+      register: borg_check
+      changed_when: false
+      failed_when: false
+
+    - name: Initialize borg repository
+      ansible.builtin.command:
+        cmd: borg init --encryption=repokey {{ borg_repo }}
+      environment:
+        BORG_PASSPHRASE: "{{ borg_passphrase }}"
+        BORG_RSH: "ssh -i /root/.ssh/id_borg -o StrictHostKeyChecking=accept-new"
+      when: borg_check.rc != 0
+
+    - name: Deploy backup script
+      ansible.builtin.template:
+        src: templates/borg-backup.sh.j2
+        dest: /usr/local/bin/borg-backup.sh
+        mode: '0755'
+
+    - name: Deploy systemd service
+      ansible.builtin.template:
+        src: templates/borg-backup.service.j2
+        dest: /etc/systemd/system/borg-backup.service
+        mode: '0644'
+      notify: reload systemd
+
+    - name: Deploy systemd timer
+      ansible.builtin.template:
+        src: templates/borg-backup.timer.j2
+        dest: /etc/systemd/system/borg-backup.timer
+        mode: '0644'
+      notify: reload systemd
+
+    - name: Enable and start timer
+      ansible.builtin.systemd:
+        name: borg-backup.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
