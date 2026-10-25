@@ -1,0 +1,8 @@
+interface={{ pxe_iface.stdout }}
+bind-interfaces
+dhcp-range={{ pxe_iface.stdout }},10.0.0.100,10.0.0.120,12h
+dhcp-boot=pxelinux.0
+dhcp-match=set:efi-x86_64,option:client-arch,7
+dhcp-boot=tag:efi-x86_64,bootx64.efi
+enable-tftp
+tftp-root=/srv/tftp/amd64

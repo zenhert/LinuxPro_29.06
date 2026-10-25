@@ -1,0 +1,15 @@
+<VirtualHost {{ pxe_ip }}:80>
+    DocumentRoot /
+
+    <Directory /srv/images>
+        Options Indexes MultiViews
+        AllowOverride All
+        Require all granted
+    </Directory>
+
+    <Directory /srv/ks>
+        Options Indexes MultiViews
+        AllowOverride All
+        Require all granted
+    </Directory>
+</VirtualHost>

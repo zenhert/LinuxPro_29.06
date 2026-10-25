@@ -1,0 +1,152 @@
+---
+- name: Configure PXE server
+  hosts: pxeserver
+  become: true
+  vars:
+    pxe_ip: "10.0.0.20"
+    netboot_url: "https://releases.ubuntu.com/24.04/ubuntu-24.04.3-netboot-amd64.tar.gz"
+    iso_url: "https://releases.ubuntu.com/24.04/ubuntu-24.04.3-live-server-amd64.iso"
+
+  tasks:
+    - name: Disable ufw
+      systemd:
+        name: ufw
+        state: stopped
+        enabled: false
+
+    - name: Install dnsmasq and apache2
+      apt:
+        name:
+          - dnsmasq
+          - apache2
+        state: present
+        update_cache: true
+
+    - name: Detect PXE interface name by IP
+      shell: "ip -o -4 addr show | awk '$4 ~ /^{{ pxe_ip }}\\// {print $2}'"
+      register: pxe_iface
+      changed_when: false
+
+    - name: Fail if PXE interface not found
+      fail:
+        msg: "Interface with IP {{ pxe_ip }} not found"
+      when: pxe_iface.stdout == ""
+
+    - name: Show detected interface
+      debug:
+        msg: "PXE interface: {{ pxe_iface.stdout }}"
+
+    - name: Deploy dnsmasq PXE config
+      template:
+        src: templates/pxe.conf.j2
+        dest: /etc/dnsmasq.d/pxe.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: restart dnsmasq
+
+    - name: Ensure /srv/tftp exists
+      file:
+        path: /srv/tftp
+        state: directory
+        mode: '0755'
+
+    - name: Download Ubuntu 24.04 server ISO
+      get_url:
+        url: "{{ iso_url }}"
+        dest: /srv/images/ubuntu-24.04.3-live-server-amd64.iso
+        timeout: 1800
+
+    - name: Extract netboot archive
+      unarchive:
+        src: /tmp/noble-netboot-amd64.tar.gz
+        dest: /srv/tftp
+        remote_src: true
+
+    - name: Flatten netboot directory structure
+      shell: |
+        if [ -d /srv/tftp/amd64/amd64 ]; then
+          mv /srv/tftp/amd64/amd64/* /srv/tftp/amd64/
+          rmdir /srv/tftp/amd64/amd64
+        fi
+      args:
+        creates: /srv/tftp/amd64/pxelinux.0
+
+    - name: Ensure pxelinux.cfg directory exists
+      file:
+        path: /srv/tftp/amd64/pxelinux.cfg
+        state: directory
+        mode: '0755'
+
+    - name: Ensure /srv/images exists
+      file:
+        path: /srv/images
+        state: directory
+        mode: '0755'
+
+    - name: Download Ubuntu 24.04 server ISO
+      get_url:
+        url: "{{ iso_url }}"
+        dest: /srv/images/noble-live-server-amd64.iso
+        timeout: 1800
+
+    - name: Ensure /srv/ks exists
+      file:
+        path: /srv/ks
+        state: directory
+        mode: '0755'
+
+    - name: Deploy user-data for autoinstall
+      template:
+        src: templates/user-data.j2
+        dest: /srv/ks/user-data
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create empty meta-data
+      copy:
+        content: ""
+        dest: /srv/ks/meta-data
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Deploy pxelinux.cfg/default
+      template:
+        src: templates/pxelinux-default.j2
+        dest: /srv/tftp/amd64/pxelinux.cfg/default
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Deploy apache vhost for ks and images
+      template:
+        src: templates/ks-server.conf.j2
+        dest: /etc/apache2/sites-available/ks-server.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable ks-server site
+      command: a2ensite ks-server.conf
+      args:
+        creates: /etc/apache2/sites-enabled/ks-server.conf
+
+    - name: Disable default apache site
+      command: a2dissite 000-default.conf
+      args:
+        removes: /etc/apache2/sites-enabled/000-default.conf
+
+    - name: Restart apache2
+      systemd:
+        name: apache2
+        state: restarted
+        enabled: true
+
+  handlers:
+    - name: restart dnsmasq
+      systemd:
+        name: dnsmasq
+        state: restarted
+        enabled: true
