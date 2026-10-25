@@ -424,11 +424,9 @@ Oct 25 15:50:09 pxeserver dnsmasq-dhcp[3942]: DHCPACK(eth1) 10.0.0.118 08:00:27:
 Как результат: `dnsmaqs` слушает 67/69 порты, `apache` отдает ISO и user-data, содержимое `pxelinux.cfg` нормальное, логи `dnsmasq` при загрузке клиента тоже в порядке и успешно запросил `DHPC`.
 
 Проверка на `pxeclient`:
-
-![1](image.png)
-![2](image-1.png)
-![3](image-2.png)
-![4](image-3.png)
-![5](image-4.png)
-
+  ![1](image.png)
+  ![2](image-1.png)
+  ![3](image-2.png)
+  ![4](image-3.png)
+  ![5](image-4.png)
 Автоустановка прошла успешно
