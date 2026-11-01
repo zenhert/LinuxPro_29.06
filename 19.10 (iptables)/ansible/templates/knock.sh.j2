@@ -1,0 +1,12 @@
+#!/bin/bash
+TARGET="192.168.255.1"
+PORTS="1111 2222 3333"
+
+echo "Стучим в $TARGET..."
+for port in $PORTS; do
+    nc -z -w 1 $TARGET $port
+    sleep 0.5
+done
+
+echo "Стук завершен. Пробуем SSH..."
+ssh -o StrictHostKeyChecking=no vagrant@$TARGET

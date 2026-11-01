@@ -1,0 +1,20 @@
+#!/bin/bash
+# Очистка
+iptables -F
+iptables -t nat -F
+
+# Разрешаем loopback и established
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# Port Knocking (1111 -> 2222 -> 3333)
+iptables -A INPUT -p tcp --dport 1111 -m recent --name KNOCK1 --set -j DROP
+iptables -A INPUT -p tcp --dport 2222 -m recent --name KNOCK1 --rcheck --seconds 10 -m recent --name KNOCK2 --set -j DROP
+iptables -A INPUT -p tcp --dport 3333 -m recent --name KNOCK2 --rcheck --seconds 10 -m recent --name KNOCK3 --set -j DROP
+
+# Разрешаем SSH только после стука
+iptables -A INPUT -p tcp --dport 22 -m recent --name KNOCK3 --rcheck --seconds 10 -j ACCEPT
+iptables -A INPUT -p tcp --dport 22 -j DROP
+
+# NAT (MASQUERADE) для выхода в интернет
+iptables -t nat -A POSTROUTING ! -d 192.168.0.0/16 -o eth0 -j MASQUERADE

@@ -1,0 +1,155 @@
+---
+- name: Common setup
+  hosts: all
+  become: true
+  tasks:
+    - name: Disable ufw
+      systemd:
+        name: ufw
+        state: stopped
+        enabled: false
+
+    - name: Install required packages
+      apt:
+        name:
+          - iptables
+          - nginx
+          - netcat-openbsd
+        state: present
+        update_cache: true
+
+- name: Enable forwarding and disable rp_filter on routers
+  hosts: [inetRouter, centralRouter, inetRouter2]
+  become: true
+  tasks:
+    - name: Enable IP forwarding
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_forward
+        value: '1'
+        state: present
+        sysctl_set: true
+        reload: true
+
+    - name: Disable strict rp_filter (Required for asymmetric routing)
+      ansible.posix.sysctl:
+        name: "{{ item }}"
+        value: '0'
+        state: present
+        sysctl_set: true
+        reload: true
+      loop:
+        - net.ipv4.conf.all.rp_filter
+        - net.ipv4.conf.default.rp_filter
+
+- name: Configure routing (Netplan overrides)
+  hosts: [centralRouter, centralServer, inetRouter2]
+  become: true
+  tasks:
+    - name: Override Netplan for centralServer
+      copy:
+        content: |
+          network:
+            version: 2
+            ethernets:
+              eth0:
+                dhcp4: true
+                dhcp4-overrides:
+                  use-routes: false
+              eth1:
+                routes:
+                  - to: default
+                    via: 192.168.0.1
+        dest: /etc/netplan/99-otus-override.yaml
+        mode: '0600'
+      when: inventory_hostname == "centralServer"
+      notify: apply netplan
+
+    - name: Override Netplan for centralRouter
+      copy:
+        content: |
+          network:
+            version: 2
+            ethernets:
+              eth0:
+                dhcp4: true
+                dhcp4-overrides:
+                  use-routes: false
+              eth1:
+                routes:
+                  - to: default
+                    via: 192.168.255.1
+              eth2:
+                routes:
+                  - to: 10.0.2.0/24
+                    via: 192.168.255.6
+        dest: /etc/netplan/99-otus-override.yaml
+        mode: '0600'
+      when: inventory_hostname == "centralRouter"
+      notify: apply netplan
+
+    - name: Override Netplan for inetRouter2
+      copy:
+        content: |
+          network:
+            version: 2
+            ethernets:
+              eth0:
+                dhcp4: true
+              eth1:
+                routes:
+                  - to: 192.168.0.0/28
+                    via: 192.168.255.5
+        dest: /etc/netplan/99-otus-override.yaml
+        mode: '0600'
+      when: inventory_hostname == "inetRouter2"
+      notify: apply netplan
+
+  handlers:
+    - name: apply netplan
+      command: netplan apply
+
+- name: Configure inetRouter (NAT + Port Knocking)
+  hosts: inetRouter
+  become: true
+  tasks:
+    - name: Deploy iptables script
+      template:
+        src: templates/iptables-inetRouter.sh.j2
+        dest: /usr/local/bin/iptables-inetRouter.sh
+        mode: '0755'
+
+    - name: Apply iptables script
+      shell: /usr/local/bin/iptables-inetRouter.sh
+
+- name: Configure inetRouter2 (Port Forwarding)
+  hosts: inetRouter2
+  become: true
+  tasks:
+    - name: Deploy iptables script
+      template:
+        src: templates/iptables-inetRouter2.sh.j2
+        dest: /usr/local/bin/iptables-inetRouter2.sh
+        mode: '0755'
+
+    - name: Apply iptables script
+      shell: /usr/local/bin/iptables-inetRouter2.sh
+
+- name: Configure centralRouter (Knock script)
+  hosts: centralRouter
+  become: true
+  tasks:
+    - name: Deploy knock script
+      template:
+        src: templates/knock.sh.j2
+        dest: /usr/local/bin/knock.sh
+        mode: '0755'
+
+- name: Configure centralServer (Nginx)
+  hosts: centralServer
+  become: true
+  tasks:
+    - name: Ensure nginx is running
+      systemd:
+        name: nginx
+        state: started
+        enabled: true

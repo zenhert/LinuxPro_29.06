@@ -1,0 +1,54 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu2404"
+
+  config.vm.define "inetRouter" do |r|
+    r.vm.hostname = "inetRouter"
+    r.vm.network "private_network", ip: "192.168.255.1", netmask: "255.255.255.252", virtualbox__intnet: "inet-central"
+    r.vm.network "private_network", ip: "192.168.50.10", adapter: 3
+    r.vm.provider "virtualbox" do |vb|
+      vb.memory = 512
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    end
+  end
+
+  config.vm.define "centralRouter" do |r|
+    r.vm.hostname = "centralRouter"
+    r.vm.network "private_network", ip: "192.168.255.2", netmask: "255.255.255.252", virtualbox__intnet: "inet-central"
+    r.vm.network "private_network", ip: "192.168.255.5", netmask: "255.255.255.252", virtualbox__intnet: "central-inet2"
+    r.vm.network "private_network", ip: "192.168.0.1", netmask: "255.255.255.240", virtualbox__intnet: "central-lan"
+    r.vm.network "private_network", ip: "192.168.50.12", adapter: 5
+    r.vm.provider "virtualbox" do |vb|
+      vb.memory = 512
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    end
+  end
+
+  config.vm.define "inetRouter2" do |r|
+    r.vm.hostname = "inetRouter2"
+    r.vm.network "private_network", ip: "192.168.255.6", netmask: "255.255.255.252", virtualbox__intnet: "central-inet2"
+    r.vm.network "private_network", ip: "192.168.50.11", adapter: 3
+    r.vm.network "forwarded_port", guest: 8080, host: 8080, host_ip: "127.0.0.1"
+    r.vm.provider "virtualbox" do |vb|
+      vb.memory = 512
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    end
+  end
+
+  config.vm.define "centralServer" do |r|
+    r.vm.hostname = "centralServer"
+    r.vm.network "private_network", ip: "192.168.0.2", netmask: "255.255.255.240", virtualbox__intnet: "central-lan"
+    r.vm.network "private_network", ip: "192.168.50.13", adapter: 3
+    r.vm.provider "virtualbox" do |vb|
+      vb.memory = 1024
+      vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    end
+
+    # Ansible запускается в самом конце, после создания всех ВМ
+    r.vm.provision "ansible" do |ansible|
+      ansible.playbook = "ansible/provision.yml"
+      ansible.inventory_path = "ansible/hosts"
+      ansible.host_key_checking = false
+      ansible.limit = "all"
+    end
+  end
+end
