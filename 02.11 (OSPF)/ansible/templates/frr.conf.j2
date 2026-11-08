@@ -1,0 +1,43 @@
+{% set r1r2_ips = ['10.0.10.1', '10.0.10.2'] %}
+{% set ospf_ips = ['10.0.10.1','10.0.10.2','10.0.11.1','10.0.11.2','10.0.12.1','10.0.12.2',
+                   '192.168.10.1','192.168.20.1','192.168.30.1'] %}
+frr version 8.1
+frr defaults traditional
+hostname {{ ansible_hostname }}
+log syslog informational
+no ipv6 forwarding
+service integrated-vtysh-config
+!
+{% for iface in ansible_facts['interfaces'] | sort %}
+{% if ansible_facts[iface]['ipv4'] is defined and ansible_facts[iface]['ipv4']['address'] is defined %}
+{% set if_ip = ansible_facts[iface]['ipv4']['address'] %}
+{% if if_ip in ospf_ips %}
+interface {{ iface }}
+ description {{ if_ip }}
+ ip ospf mtu-ignore
+ ip ospf hello-interval 10
+ ip ospf dead-interval 30
+{% if if_ip in r1r2_ips %}
+{% if ansible_hostname == 'router1' or (ansible_hostname == 'router2' and symmetric_routing | bool) %}
+ ip ospf cost 1000
+{% endif %}
+{% endif %}
+!
+{% endif %}
+{% endif %}
+{% endfor %}
+
+router ospf
+{% if router_id is defined %}
+ ospf router-id {{ router_id }}
+{% endif %}
+{% for iface in ansible_facts['interfaces'] | sort %}
+{% if ansible_facts[iface]['ipv4'] is defined and ansible_facts[iface]['ipv4']['address'] is defined %}
+{% set if_ip = ansible_facts[iface]['ipv4']['address'] %}
+{% if if_ip in ospf_ips %}
+ network {{ ansible_facts[iface]['ipv4']['network'] }}/{{ ansible_facts[iface]['ipv4']['prefix'] }} area 0
+{% endif %}
+{% endif %}
+{% endfor %}
+!
+log file /var/log/frr/frr.log
