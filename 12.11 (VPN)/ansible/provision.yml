@@ -1,0 +1,138 @@
+---
+- name: Common setup
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install OpenVPN and iperf3
+      apt:
+        name:
+          - openvpn
+          - iperf3
+        state: present
+        update_cache: true
+
+    - name: Disable ufw
+      systemd:
+        name: ufw
+        state: stopped
+        enabled: false
+
+- name: Configure Static Key (TUN/TAP)
+  hosts: server
+  become: yes
+  tasks:
+    - name: Generate static key
+      command: openvpn --genkey secret /etc/openvpn/static.key
+      args:
+        creates: /etc/openvpn/static.key
+
+    - name: Fetch static key to host
+      fetch:
+        src: /etc/openvpn/static.key
+        dest: ansible/files/static.key
+        flat: yes
+
+- name: Deploy static key to client
+  hosts: client
+  become: yes
+  tasks:
+    - name: Copy static key
+      copy:
+        src: ansible/files/static.key
+        dest: /etc/openvpn/static.key
+        mode: '0600'
+
+- name: Deploy TUN/TAP configs
+  hosts: all
+  become: yes
+  tasks:
+    - name: Deploy tap config
+      template:
+        src: "templates/tap-{{ inventory_hostname }}.conf.j2"
+        dest: /etc/openvpn/tap.conf
+        mode: '0600'
+
+    - name: Deploy tun config
+      template:
+        src: "templates/tun-{{ inventory_hostname }}.conf.j2"
+        dest: /etc/openvpn/tun.conf
+        mode: '0600'
+
+- name: Setup RAS (OpenVPN Server with PKI)
+  hosts: server
+  become: yes
+  tasks:
+    - name: Install easy-rsa
+      apt:
+        name: easy-rsa
+        state: present
+
+    - name: Init PKI
+      command: /usr/share/easy-rsa/easyrsa init-pki
+      args:
+        chdir: /etc/openvpn
+        creates: /etc/openvpn/pki
+
+    - name: Build CA (no pass)
+      shell: echo 'rasvpn' | /usr/share/easy-rsa/easyrsa --batch build-ca nopass
+      args:
+        chdir: /etc/openvpn
+        creates: /etc/openvpn/pki/ca.crt
+
+    - name: Gen Server req
+      shell: echo 'rasvpn' | /usr/share/easy-rsa/easyrsa --batch gen-req server nopass
+      args:
+        chdir: /etc/openvpn
+        creates: /etc/openvpn/pki/private/server.key
+
+    - name: Sign Server req
+      shell: echo 'yes' | /usr/share/easy-rsa/easyrsa --batch sign-req server server
+      args:
+        chdir: /etc/openvpn
+        creates: /etc/openvpn/pki/issued/server.crt
+
+    - name: Gen DH
+      shell: /usr/share/easy-rsa/easyrsa --batch gen-dh
+      args:
+        chdir: /etc/openvpn
+        creates: /etc/openvpn/pki/dh.pem
+      async: 300
+      poll: 10
+
+    - name: Gen Client req
+      shell: echo 'client' | /usr/share/easy-rsa/easyrsa --batch gen-req client nopass
+      args:
+        chdir: /etc/openvpn
+        creates: /etc/openvpn/pki/private/client.key
+
+    - name: Sign Client req
+      shell: echo 'yes' | /usr/share/easy-rsa/easyrsa --batch sign-req client client
+      args:
+        chdir: /etc/openvpn
+        creates: /etc/openvpn/pki/issued/client.crt
+
+    - name: Deploy RAS server config
+      template:
+        src: templates/ras-server.conf.j2
+        dest: /etc/openvpn/server.conf
+        mode: '0600'
+
+    - name: Fetch certs to host
+      fetch:
+        src: "/etc/openvpn/pki/{{ item }}"
+        dest: "{{ playbook_dir }}/files/{{ item | basename }}"
+        flat: yes
+      loop:
+        - ca.crt
+        - issued/client.crt
+        - private/client.key
+
+- name: Create client.ovpn on host
+  hosts: server
+  tasks:
+    - name: Render client.ovpn locally
+      template:
+        src: "{{ playbook_dir }}/templates/client.ovpn.j2"
+        dest: "{{ playbook_dir }}/files/client.ovpn"
+      delegate_to: localhost
+      become: false

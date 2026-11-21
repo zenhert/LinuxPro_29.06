@@ -1,0 +1,11 @@
+dev tap
+remote 192.168.56.10
+ifconfig 10.10.10.2 255.255.255.0
+topology subnet
+secret /etc/openvpn/static.key
+data-ciphers AES-256-CBC
+data-ciphers-fallback AES-256-CBC
+comp-lzo
+status /var/log/openvpn-status.log
+log /var/log/openvpn.log
+verb 3
