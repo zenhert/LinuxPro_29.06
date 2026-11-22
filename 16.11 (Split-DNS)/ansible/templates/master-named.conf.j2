@@ -1,0 +1,75 @@
+options {
+    listen-on port 53 { 192.168.50.10; 127.0.0.1; };
+    listen-on-v6 port 53 { ::1; };
+    directory       "/var/cache/bind";
+    recursion yes;
+    allow-query     { any; };
+    dnssec-validation auto;
+};
+
+// Генерация ключей для TSIG (заранее сгенерированы)
+key "client-key" {
+    algorithm hmac-sha256;
+    secret "IQg171Ht4mdGYcjjYKhI9gSc1fhoxzHZB+h2NMtyZWY=";
+};
+key "client2-key" {
+    algorithm hmac-sha256;
+    secret "m7r7SpZ9KBcA4kOl1JHQQnUiIlpQA1IJ9xkBHwdRAHc=";
+};
+
+// Access Control Lists
+acl client { !key client2-key; key client-key; 192.168.50.15; };
+acl client2 { !key client-key; key client2-key; 192.168.50.16; };
+
+// VIEW 1: Для client1
+view "client" {
+    match-clients { client; };
+    recursion yes;
+
+    zone "dns.lab" {
+        type master;
+        file "/var/lib/bind/named.dns.lab.client";
+    };
+    zone "newdns.lab" {
+        type master;
+        file "/var/lib/bind/named.newdns.lab";
+    };
+};
+
+// VIEW 2: Для client2
+view "client2" {
+    match-clients { client2; };
+    recursion yes;
+
+    zone "dns.lab" {
+        type master;
+        file "/var/lib/bind/named.dns.lab";
+    };
+    zone "50.168.192.in-addr.arpa" {
+        type master;
+        file "/var/lib/bind/named.dns.lab.rev";
+    };
+};
+
+// VIEW 3: Default
+view "default" {
+    match-clients { any; };
+    recursion yes;
+
+    zone "." { type hint; file "/usr/share/dns/root.hints"; };
+    zone "localhost" { type master; file "/etc/bind/db.local"; };
+    zone "127.in-addr.arpa" { type master; file "/etc/bind/db.127"; };
+
+    zone "dns.lab" {
+        type master;
+        file "/var/lib/bind/named.dns.lab";
+    };
+    zone "newdns.lab" {
+        type master;
+        file "/var/lib/bind/named.newdns.lab";
+    };
+    zone "50.168.192.in-addr.arpa" {
+        type master;
+        file "/var/lib/bind/named.dns.lab.rev";
+    };
+};

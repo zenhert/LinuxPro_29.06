@@ -1,0 +1,15 @@
+$TTL 3600
+@               IN      SOA     ns01.dns.lab. root.dns.lab. (
+                            2711201407 ; serial
+                            3600       ; refresh
+                            600        ; retry
+                            86400      ; expire
+                            600        ; minimum
+                        )
+                IN      NS      ns01.dns.lab.
+                IN      NS      ns02.dns.lab.
+
+10              IN      PTR     ns01.dns.lab.
+11              IN      PTR     ns02.dns.lab.
+15              IN      PTR     web1.dns.lab.
+16              IN      PTR     web2.dns.lab.

@@ -1,0 +1,39 @@
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu2404"
+
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 512
+    v.cpus = 1
+  end
+
+  config.vm.define "ns01" do |ns01|
+    ns01.vm.network "private_network", ip: "192.168.50.10", virtualbox__intnet: "dns"
+    ns01.vm.network "private_network", ip: "192.168.60.10", adapter: 3   # hostonly для Ansible
+    ns01.vm.hostname = "ns01"
+  end
+
+  config.vm.define "ns02" do |ns02|
+    ns02.vm.network "private_network", ip: "192.168.50.11", virtualbox__intnet: "dns"
+    ns02.vm.network "private_network", ip: "192.168.60.11", adapter: 3
+    ns02.vm.hostname = "ns02"
+  end
+
+  config.vm.define "client" do |client|
+    client.vm.network "private_network", ip: "192.168.50.15", virtualbox__intnet: "dns"
+    client.vm.network "private_network", ip: "192.168.60.15", adapter: 3
+    client.vm.hostname = "client"
+  end
+
+  config.vm.define "client2" do |client2|
+    client2.vm.network "private_network", ip: "192.168.50.16", virtualbox__intnet: "dns"
+    client2.vm.network "private_network", ip: "192.168.60.16", adapter: 3
+    client2.vm.hostname = "client2"
+
+    client2.vm.provision "ansible" do |ansible|
+      ansible.playbook = "ansible/provision.yml"
+      ansible.inventory_path = "ansible/hosts"
+      ansible.host_key_checking = false
+      ansible.limit = "all"
+    end
+  end
+end

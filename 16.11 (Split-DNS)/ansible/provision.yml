@@ -1,0 +1,117 @@
+---
+- name: Common setup for all hosts
+  hosts: all
+  become: yes
+  tasks:
+    - name: Install bind9 and utilities
+      apt:
+        name:
+          - bind9
+          - bind9-utils
+          - dnsutils
+        state: present
+        update_cache: true
+
+    - name: Disable systemd-resolved (it blocks port 53 and overwrites resolv.conf)
+      systemd:
+        name: systemd-resolved
+        state: stopped
+        enabled: no
+
+    - name: Remove symlink for resolv.conf
+      file:
+        path: /etc/resolv.conf
+        state: absent
+
+    - name: Ensure /etc/bind and /var/lib/bind directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: bind
+        mode: '0775'
+      loop:
+        - /etc/bind
+        - /var/lib/bind
+
+- name: Configure Master DNS (ns01)
+  hosts: ns01
+  become: yes
+  tasks:
+    - name: Deploy master named.conf
+      template:
+        src: templates/master-named.conf.j2
+        dest: /etc/bind/named.conf
+        owner: root
+        group: bind
+        mode: '0640'
+      notify: restart bind9
+
+    - name: Deploy zone files for ns01
+      template:
+        src: "templates/{{ item }}.j2"
+        dest: "/var/lib/bind/{{ item }}"
+        owner: root
+        group: bind
+        mode: '0640'
+      loop:
+        - named.dns.lab
+        - named.dns.lab.client
+        - named.newdns.lab
+        - named.dns.lab.rev
+      notify: restart bind9
+
+    - name: Deploy resolv.conf for ns01
+      template:
+        src: templates/servers-resolv.conf.j2
+        dest: /etc/resolv.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+  handlers:
+    - name: restart bind9
+      systemd:
+        name: bind9
+        state: restarted
+        enabled: yes
+
+- name: Configure Slave DNS (ns02)
+  hosts: ns02
+  become: yes
+  tasks:
+    - name: Deploy slave named.conf
+      template:
+        src: templates/slave-named.conf.j2
+        dest: /etc/bind/named.conf
+        owner: root
+        group: bind
+        mode: '0640'
+      notify: restart bind9
+
+    - name: Deploy resolv.conf for ns02
+      template:
+        src: templates/servers-resolv.conf.j2
+        dest: /etc/resolv.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+  handlers:
+    - name: restart bind9
+      systemd:
+        name: bind9
+        state: restarted
+        enabled: yes
+
+- name: Configure clients
+  hosts: clients
+  become: yes
+  tasks:
+    - name: Deploy resolv.conf for clients
+      template:
+        src: templates/client-resolv.conf.j2
+        dest: /etc/resolv.conf
+        owner: root
+        group: root
+        mode: '0644'

@@ -1,0 +1,33 @@
+options {
+    listen-on port 53 { 192.168.50.11; 127.0.0.1; };
+    listen-on-v6 port 53 { ::1; };
+    directory       "/var/cache/bind";
+    recursion yes;
+    allow-query     { any; };
+    dnssec-validation auto;
+};
+
+view "default" {
+    match-clients { any; };
+    recursion yes;
+
+    zone "." { type hint; file "/usr/share/dns/root.hints"; };
+    zone "localhost" { type master; file "/etc/bind/db.local"; };
+    zone "127.in-addr.arpa" { type master; file "/etc/bind/db.127"; };
+
+    zone "dns.lab" {
+        type slave;
+        masters { 192.168.50.10; };
+        file "/var/lib/bind/named.dns.lab";
+    };
+    zone "newdns.lab" {
+        type slave;
+        masters { 192.168.50.10; };
+        file "/var/lib/bind/named.newdns.lab";
+    };
+    zone "50.168.192.in-addr.arpa" {
+        type slave;
+        masters { 192.168.50.10; };
+        file "/var/lib/bind/named.dns.lab.rev";
+    };
+};
